@@ -12,7 +12,8 @@ use axum::body::Body;
 use dotenv::dotenv;
 use tokio::net::TcpListener;
 use mysql::Pool;
-use mysql::prelude::Queryable; 
+use mysql::prelude::Queryable;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Deserialize, Serialize)]
 struct User {
@@ -40,6 +41,7 @@ async fn add_author(Json(user): Json<User>) -> impl IntoResponse {
 
     match result {
         Ok(_) => {
+            tracing::trace!("add_author sucees to insert new author");
             // Obtém o ID do autor recém-criado
             let author_id = conn.last_insert_id();
 
@@ -51,10 +53,12 @@ async fn add_author(Json(user): Json<User>) -> impl IntoResponse {
 
             (StatusCode::CREATED, Json(response)).into_response()
         }
-        Err(e) => (
+        Err(e) => {
+            tracing::error!("add_author error error: {:?}", &e);
+            (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to create user: {}", e),
-        )
+        )}
         .into_response(),
     }
 }
@@ -63,7 +67,20 @@ async fn add_author(Json(user): Json<User>) -> impl IntoResponse {
 async fn main() {
     dotenv().ok();
     println!("🌟 importer wordpress data 🌟");
-        
+    tracing_subscriber::registry()
+    .with(
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            // axum logs rejections from built-in extractors with the `axum::rejection`
+            // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+            format!(
+                "{}=debug,tower_http=debug,axum::rejection=trace",
+                env!("CARGO_CRATE_NAME")
+            )
+            .into()
+        }),
+    )
+    .with(tracing_subscriber::fmt::layer())
+    .init();
     let app = Router::new()
         .route("/api/healthcheck", get(health_check_handler))        
         .route("/api/authors", post(add_author))
@@ -71,8 +88,8 @@ async fn main() {
         
 
     println!("🚀 Server started");
-
     let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
@@ -81,6 +98,7 @@ async fn main() {
 
 pub async fn health_check_handler() -> impl IntoResponse {
     const MESSAGE: &str = "API Services";
+    tracing::trace!("health_check started");
 
     let json_response = serde_json::json!({
         "status": "ok",
@@ -94,6 +112,7 @@ async fn validation_fingerprint(
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    tracing::trace!("validation_fingerprint started");
     let token = match env::var("API_TOKEN") {
         Ok(token) => token,
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -104,9 +123,11 @@ async fn validation_fingerprint(
 
     if let Some(auth_header) = req.headers().get(http::header::AUTHORIZATION) {
         if auth_header != &expected_auth {
+            tracing::error!("validation_fingerprint not valid");
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
+        tracing::error!("validation_fingerprint not valid");
         return Err(StatusCode::UNAUTHORIZED);
     }
 
