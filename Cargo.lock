@@ -1061,7 +1061,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "import-wp"
+name = "import_wp"
 version = "0.1.0"
 dependencies = [
  "axum",
