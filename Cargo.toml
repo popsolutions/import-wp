@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7.5"
 mysql = "23.0.1"
 chrono = { version = "0.4.38", features = ["serde"] }
 dotenv = "0.15.0"
@@ -16,3 +15,6 @@ uuid = { version = "1.10.0", features = ["serde", "v4"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 scraper = "0.21.0"
+image = "0.25.5"
+webp = "0.3.0"
+axum = { version = "0.7.9", features = ["multipart"] }

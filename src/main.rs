@@ -14,10 +14,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod authors;
 mod health;
+mod image;
 mod posts;
 mod tags;
 use authors::add_author;
 use health::health_check_handler;
+use image::upload_image;
 use posts::add_post;
 use tags::add_tag;
 
@@ -44,6 +46,7 @@ async fn main() {
         .route("/api/authors", post(add_author))
         .route("/api/tags", post(add_tag))
         .route("/api/posts", post(add_post))
+        .route("/api/posts/image", post(upload_image))
         .layer(middleware::from_fn(validation_fingerprint));
 
     println!("🚀 Server started");
