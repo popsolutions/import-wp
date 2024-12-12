@@ -18,3 +18,4 @@ scraper = "0.21.0"
 image = "0.25.5"
 webp = "0.3.0"
 axum = { version = "0.7.9", features = ["multipart"] }
+base64 = "0.22.1"

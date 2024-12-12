@@ -1,53 +1,89 @@
-use axum::extract::Multipart;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::{http::StatusCode, response::IntoResponse, Json};
+use base64::decode;
+use chrono::Utc;
 use chrono::{Datelike, Local};
-use std::{fs, path::PathBuf};
+use mysql::{prelude::Queryable, Pool};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::{env, fs, io::Write, path::Path};
+use tracing::{error, info};
 use webp::{Encoder, WebPMemory};
 
-pub async fn upload_image(mut multipart: Multipart) -> impl IntoResponse {
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        if let Some(filename) = field.file_name() {
-            let content_type = field.content_type().map(|ct| ct.to_string());
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ImagePost {
+    post_id: u64,
+    base64: String,
+}
 
-            // Verifica se é uma imagem
-            if let Some(ct) = content_type {
-                if ct.starts_with("image/") {
-                    // Lê os bytes do arquivo
-                    let bytes = field.bytes().await.unwrap();
+pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
+    let db_url = env::var("DB_URL").unwrap();
+    let connection_opts = mysql::Opts::from_url(&db_url).unwrap();
+    let pool = Pool::new(connection_opts).unwrap();
+    let mut conn = pool.get_conn().unwrap();
 
-                    // Converte a imagem para WebP
-                    match convert_to_webp(&bytes) {
-                        Ok(webp_bytes) => {
-                            // Gera o caminho para salvar a imagem
-                            if let Ok(path) = generate_image_path() {
-                                // Cria o diretório, se necessário
-                                if let Err(e) = fs::create_dir_all(&path.parent().unwrap()) {
-                                    eprintln!("Erro ao criar diretório: {}", e);
-                                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                                }
-
-                                // Salva o arquivo
-                                let file_path = path.to_str().unwrap().to_string();
-                                if fs::write(&file_path, webp_bytes.to_vec()).is_ok() {
-                                    return (StatusCode::OK, file_path).into_response();
-                                } else {
-                                    eprintln!("Erro ao salvar o arquivo");
-                                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Erro ao converter imagem para WebP: {}", e);
-                            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                        }
-                    }
-                }
-            }
+    // Decodificar base64
+    let image_data = match decode(&image_post.base64) {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Erro ao decodificar base64: {:?}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                "Imagem em base64 inválida".to_string(),
+            )
+                .into_response();
         }
+    };
+
+    // Gerar caminho e nome do arquivo
+    let timestamp = Utc::now().format("%Y%m%d%H%M%S").to_string();
+    let file_name = format!("post-{}-{}.jpg", image_post.post_id, timestamp);
+    let save_path = format!("./opt/ghost/content/images/{}", file_name);
+
+    // Criar diretório se não existir
+    if let Err(e) = fs::create_dir_all(Path::new("./opt/ghost/content/images")) {
+        tracing::error!("Erro ao criar diretório de imagens: {:?}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Erro ao salvar imagem".to_string(),
+        )
+            .into_response();
     }
 
-    StatusCode::BAD_REQUEST.into_response()
+    // Salvar a imagem no sistema de arquivos
+    if let Err(e) = fs::File::create(&save_path).and_then(|mut file| file.write_all(&image_data)) {
+        tracing::error!("Erro ao salvar imagem no disco: {:?}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Erro ao salvar imagem".to_string(),
+        )
+            .into_response();
+    }
+
+    let image_url = format!("/opt/ghost/content/images/{}", file_name);
+
+    let result = conn.exec_drop(
+        "INSERT INTO post_images (post_id, image_url, created_at) VALUES (?, ?, NOW())",
+        (&image_post.post_id, &image_url),
+    );
+
+    match result {
+        Ok(_) => {
+            info!("Imagem salva com sucesso: {}", image_url);
+            (
+                StatusCode::CREATED,
+                format!("Imagem salva com sucesso: {}", image_url),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!("Erro ao salvar URL da imagem no banco de dados: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erro ao salvar imagem no banco de dados".to_string(),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Converte bytes de uma imagem para o formato WebP.
