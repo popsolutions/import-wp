@@ -20,7 +20,7 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     let connection_opts = mysql::Opts::from_url(&db_url).unwrap();
     let pool = Pool::new(connection_opts).unwrap();
     let mut conn = pool.get_conn().unwrap();
-
+    info!("Received request add image");
     // Decodificar base64
     let image_data = match decode(&image_post.base64) {
         Ok(data) => data,
@@ -60,7 +60,7 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     }
 
     let image_url = format!("/opt/ghost/content/images/{}", file_name);
-
+    info!("image saved in: {}", &image_url);
     let result = conn.exec_drop(
         "UPDATE posts SET feature_image = ? where id = ?",
         (&image_url, &image_post.post_id),
