@@ -45,20 +45,21 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
     match res_author {
         Some(author_id) => {
             let result = conn.exec_drop(
-            "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, feature_image, published_at, email_recipient_filter, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'all', 'published')",
-            (
-                &post_id,
-                &uuid,
-                &post.title,
-                &post.slug,
-                &post.html,
-                &content,
-                &post.created_at,
-                &post.updated_at,
-                &author_id,
-                &post.image_url.unwrap_or(String::from("")),
-                &post.created_at,
-            ),
+                "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, published_at, created_by, feature_image, email_recipient_filter, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'all', 'published')",
+                (
+                    &post_id,
+                    &uuid,
+                    &post.title,
+                    &post.slug,
+                    &post.html,
+                    &content,
+                    &post.created_at,
+                    &post.updated_at,
+                    &post.created_at,
+                    &author_id,
+                    &post.image_url.unwrap_or(String::from("")),
+                ),
             );
 
             match result {
