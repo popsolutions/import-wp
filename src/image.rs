@@ -11,8 +11,30 @@ use webp::{Encoder, WebPMemory};
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct ImagePost {
-    post_id: u64,
+    post_id: String,
+    path_image: String,
     base64: String,
+}
+
+fn folder_year(original: String) -> String {
+    if let Some(start) = original.find("wp-content/uploads/") {
+        let after_prefix = &original[start + "wp-content/uploads/".len()..];
+
+        // Procurar a segunda barra para capturar ano/mês corretamente
+        if let Some(end) = after_prefix.find('/') {
+            if let Some(second_end) = after_prefix[end + 1..].find('/') {
+                let date_part = &after_prefix[..end + second_end + 1];
+                let result = format!("/{}/", date_part);
+                return String::from(result);
+            }
+        }
+    }
+    return original;
+}
+
+fn replace_name(original: String) -> String {
+    let re = original.replace("wp-content/uploads/", "");
+    String::from(re)
 }
 
 pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
@@ -34,13 +56,12 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
         }
     };
 
-    // Gerar caminho e nome do arquivo
-    let timestamp = Utc::now().format("%Y%m%d%H%M%S").to_string();
-    let file_name = format!("post-{}-{}.jpg", image_post.post_id, timestamp);
-    let save_path = format!("./opt/ghost/content/images/{}", file_name);
-
+    let image_copy = image_post.clone();
+    let file_name = replace_name(image_post.path_image);
+    let save_path_file = format!("/opt/ghost/content/images/{}", &file_name);
+    let save_path = folder_year(String::from(image_copy.path_image));
     // Criar diretório se não existir
-    if let Err(e) = fs::create_dir_all(Path::new("./opt/ghost/content/images")) {
+    if let Err(e) = fs::create_dir_all(Path::new(&save_path)) {
         tracing::error!("Erro ao criar diretório de imagens: {:?}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -50,7 +71,9 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     }
 
     // Salvar a imagem no sistema de arquivos
-    if let Err(e) = fs::File::create(&save_path).and_then(|mut file| file.write_all(&image_data)) {
+    if let Err(e) =
+        fs::File::create(&save_path_file).and_then(|mut file| file.write_all(&image_data))
+    {
         tracing::error!("Erro ao salvar imagem no disco: {:?}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -59,7 +82,7 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
             .into_response();
     }
 
-    let image_url = format!("/opt/ghost/content/images/{}", file_name);
+    let image_url = format!("/content/images/{}", file_name);
     info!("image saved in: {}", &image_url);
     let result = conn.exec_drop(
         "UPDATE posts SET feature_image = ? where id = ?",
