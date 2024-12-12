@@ -58,8 +58,10 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
 
     let image_copy = image_post.clone();
     let file_name = replace_name(image_post.path_image);
+    info!("Image name: {}", file_name);
     let save_path_file = format!("/opt/ghost/content/images/{}", &file_name);
     let save_path = folder_year(String::from(image_copy.path_image));
+    info!("save_path_file: {}", save_path_file);
     // Criar diretório se não existir
     if let Err(e) = fs::create_dir_all(Path::new(&save_path)) {
         tracing::error!("Erro ao criar diretório de imagens: {:?}", e);
