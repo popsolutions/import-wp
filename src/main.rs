@@ -46,7 +46,7 @@ async fn main() {
         .route("/api/authors", post(add_author))
         .route("/api/tags", post(add_tag))
         .route("/api/posts", post(add_post))
-        .route("/api/posts/image", post(add_image))
+        .route("/api/image", post(add_image))
         .layer(middleware::from_fn(validation_fingerprint));
 
     println!("🚀 Server started");
