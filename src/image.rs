@@ -62,8 +62,8 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     let image_url = format!("/opt/ghost/content/images/{}", file_name);
 
     let result = conn.exec_drop(
-        "INSERT INTO post_images (post_id, image_url, created_at) VALUES (?, ?, NOW())",
-        (&image_post.post_id, &image_url),
+        "UPDATE posts SET feature_image = ? where id = ?",
+        (&image_url, &image_post.post_id),
     );
 
     match result {
