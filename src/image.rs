@@ -61,9 +61,12 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     info!("Image name: {}", file_name);
     let save_path_file = format!("/opt/ghost/content/images{}", &file_name);
     let save_path = folder_year(String::from(image_copy.path_image));
+    let folder_base = String::from("/opt/ghost/content/images");
+    let folder_save = format!("{}{}", &folder_base, &save_path);
+    info!("save_path: {}", save_path);
     info!("save_path_file: {}", save_path_file);
     // Criar diretório se não existir
-    if let Err(e) = fs::create_dir_all(Path::new(&save_path)) {
+    if let Err(e) = fs::create_dir_all(Path::new(&folder_save)) {
         tracing::error!("Erro ao criar diretório de imagens: {:?}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -84,7 +87,7 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
             .into_response();
     }
 
-    let image_url = format!("/content/images/{}", file_name);
+    let image_url = format!("/content/images{}", file_name);
     info!("image saved in: {}", &image_url);
     let result = conn.exec_drop(
         "UPDATE posts SET feature_image = ? where id = ?",
@@ -92,8 +95,9 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
     );
 
     match result {
-        Ok(_) => {
+        Ok(ress) => {
             info!("Imagem salva com sucesso: {}", image_url);
+            info!("res: {:?}", ress);
             (
                 StatusCode::CREATED,
                 format!("Imagem salva com sucesso: {}", image_url),
