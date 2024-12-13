@@ -57,7 +57,7 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                     &post.updated_at,
                     &author_id,
                     &author_id,
-                    &post.updated_at,
+                    &post.created_at,
                     &post.image_url.unwrap_or(String::from("")),
                 ),
             );
@@ -112,6 +112,32 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                                 tracing::error!("not insert tag in post ");
                             }
                         }
+                    }
+
+                    let mobiledoc_json = format!(
+                        r#"{{"version":"0.3.1","atoms":[],"cards":[],"markups":[],"sections":[[1,"p",[[0,[],0,"{}"]]]]}}"#,
+                        &post.html
+                    );
+
+                    let result_mobiledoc = conn.exec_drop(
+                        "INSERT INTO mobiledoc_revisions (post_id, mobiledoc, created_at) VALUES (?, ?, ?)",
+                        (&post_id, &mobiledoc_json, &post.created_at),
+                    );
+
+                    match result_mobiledoc {
+                        Ok(_) => tracing::info!("inserted mobiledoc revision"),
+                        Err(e) => tracing::error!("failed to insert mobiledoc revision: {:?}", &e),
+                    }
+
+                    // Inserção em post_revisions
+                    let result_post_revision = conn.exec_drop(
+                        "INSERT INTO post_revisions (post_id, title, html, created_at) VALUES (?, ?, ?, ?)",
+                        (&post_id, &post.title, &post.html, &post.created_at),
+                    );
+
+                    match result_post_revision {
+                        Ok(_) => tracing::info!("inserted post revision"),
+                        Err(e) => tracing::error!("failed to insert post revision: {:?}", &e),
                     }
 
                     let response = PostReply {
