@@ -45,7 +45,7 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
     match res_author {
         Some(author_id) => {
             let result = conn.exec_drop(
-                "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, published_by, published_at, feature_image, email_recipient_filter, status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'all', 'published', 'public')",
+                "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, published_by, published_at, feature_image, email_recipient_filter, status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'all', 'published', 'public')",
                 (
                     &post_id,
                     &uuid,
