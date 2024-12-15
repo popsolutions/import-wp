@@ -44,8 +44,9 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
 
     match res_author {
         Some(author_id) => {
+            let image_url_str = &post.image_url.unwrap_or(String::from(""));
             let result = conn.exec_drop(
-                "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, published_by, published_at, feature_image, email_recipient_filter, status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'all', 'published', 'public')",
+                "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, published_by, published_at, feature_image, type, email_recipient_filter, status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'post', 'all', 'published', 'public')",
                 (
                     &post_id,
                     &uuid,
@@ -58,7 +59,7 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                     &author_id,
                     &author_id,
                     &post.created_at,
-                    &post.image_url.unwrap_or(String::from("")),
+                    &image_url_str,
                 ),
             );
 
