@@ -114,29 +114,3 @@ pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
         }
     }
 }
-
-/// Converte bytes de uma imagem para o formato WebP.
-fn convert_to_webp(image_bytes: &[u8]) -> Result<WebPMemory, String> {
-    // Carrega a imagem
-    let image = image::load_from_memory(image_bytes)
-        .map_err(|e| format!("Erro ao carregar a imagem: {}", e))?;
-
-    // Codifica a imagem como WebP
-    let encoder =
-        Encoder::from_image(&image).map_err(|e| format!("Erro ao codificar WebP: {}", e))?;
-    Ok(encoder.encode(75.0)) // Qualidade do WebP (0 a 100)
-}
-
-/// Gera o caminho para salvar a imagem no formato `/opt/ghost/content/images/YYYY/MM/DD-hash.webp`.
-fn generate_image_path() -> Result<PathBuf, String> {
-    let now = Local::now();
-    let hash = uuid::Uuid::new_v4().to_string();
-    let path = format!(
-        "/opt/ghost/content/images/{}/{}/{}/{}.webp",
-        now.year(),
-        now.month(),
-        now.day(),
-        hash
-    );
-    Ok(PathBuf::from(path))
-}

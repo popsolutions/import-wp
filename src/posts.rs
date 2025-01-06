@@ -120,6 +120,7 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                         &post.html
                     );
 
+                    tracing::info!("post.tags: {:?}", &post.tags);
                     let result_mobiledoc = conn.exec_drop(
                         "INSERT INTO mobiledoc_revisions (post_id, mobiledoc, created_at) VALUES (?, ?, ?)",
                         (&post_id, &mobiledoc_json, &post.created_at),
