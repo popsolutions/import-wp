@@ -1,13 +1,12 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use base64::decode;
-use chrono::Utc;
-use chrono::{Datelike, Local};
-use mysql::{prelude::Queryable, Pool};
+
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::{env, fs, io::Write, path::Path};
+use std::{fs, io::Write, path::Path};
 use tracing::{error, info};
-use webp::{Encoder, WebPMemory};
+use crate::database::connect_to_database;
+use mysql::prelude::Queryable;
+use serde_json::json;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct ImagePost {
@@ -38,12 +37,21 @@ fn replace_name(original: String) -> String {
 }
 
 pub async fn add_image(Json(image_post): Json<ImagePost>) -> impl IntoResponse {
-    let db_url = env::var("DB_URL").unwrap();
-    let connection_opts = mysql::Opts::from_url(&db_url).unwrap();
-    let pool = Pool::new(connection_opts).unwrap();
-    let mut conn = pool.get_conn().unwrap();
-    info!("Received request add image");
-    // Decodificar base64
+    tracing::info!("add_image started");
+    let mut conn = match connect_to_database() {
+        Ok(conn) => conn,
+        Err((status, message)) => {
+            tracing::info!("error: {}", message);
+            return (
+                status,
+                Json(json!({
+                    "status": "fail",
+                    "message": message
+                })),
+            )
+            .into_response();
+        }
+    };
     let image_data = match decode(&image_post.base64) {
         Ok(data) => data,
         Err(e) => {

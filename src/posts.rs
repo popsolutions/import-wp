@@ -1,9 +1,12 @@
+use crate::database::connect_to_database;
 use axum::{http::StatusCode, response::IntoResponse, Json};
+use chrono::NaiveDateTime;
+use chrono::Utc;
 use import_wp::generate_truncated_uuid;
 use import_wp::html_to_mobiledoc;
 use mysql::{params, prelude::Queryable, Pool};
 use serde::{Deserialize, Serialize};
-use std::env;
+use serde_json::json;
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
@@ -30,10 +33,21 @@ pub struct PostReply {
 }
 
 pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
-    let db_url = env::var("DB_URL").unwrap();
-    let connection_opts = mysql::Opts::from_url(&db_url).unwrap();
-    let pool = Pool::new(connection_opts).unwrap();
-    let mut conn = pool.get_conn().unwrap();
+    tracing::info!("add_post started");
+    let mut conn = match connect_to_database() {
+        Ok(conn) => conn,
+        Err((status, message)) => {
+            tracing::info!("error: {}", message);
+            return (
+                status,
+                Json(json!({
+                    "status": "fail",
+                    "message": message
+                })),
+            )
+                .into_response();
+        }
+    };
     let post_id = generate_truncated_uuid();
     let uuid = Uuid::new_v4().to_string();
     let content = html_to_mobiledoc(&post.html);
@@ -44,7 +58,10 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
 
     match res_author {
         Some(author_id) => {
-            let image_url_str = &post.image_url.unwrap_or(String::from(""));
+            let image_url_str = match &post.image_url {
+                Some(image_url_some) => format!("__GHOST_URL__{}", image_url_some),
+                None => String::from(""),
+            };
             let result = conn.exec_drop(
                 "INSERT INTO posts (id, uuid, title, slug, html, lexical, created_at, updated_at, created_by, published_by, published_at, feature_image, type, email_recipient_filter, status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'post', 'all', 'published', 'public')",
                 (
@@ -53,7 +70,7 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                     &post.title,
                     &post.slug,
                     &post.html,
-                    &content,
+                        &content,
                     &post.created_at,
                     &post.updated_at,
                     &author_id,
@@ -115,15 +132,36 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                         }
                     }
 
+                    tracing::info!("post.tags: {:?}", &post.tags);
+
                     let mobiledoc_json = format!(
                         r#"{{"version":"0.3.1","atoms":[],"cards":[],"markups":[],"sections":[[1,"p",[[0,[],0,"{}"]]]]}}"#,
                         &post.html
                     );
 
-                    tracing::info!("post.tags: {:?}", &post.tags);
+                    let naive_datetime = match NaiveDateTime::parse_from_str(
+                        &post.created_at,
+                        "%Y-%m-%d %H:%M:%S",
+                    ) {
+                        Ok(dt) => dt,
+                        Err(e) => {
+                            tracing::error!("Failed to parse created_at: {:?}", e);
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                Json(json!({
+                                    "status": "fail",
+                                    "message": "Invalid created_at format"
+                                })),
+                            )
+                                .into_response();
+                        }
+                    };
+
+                    let mobiledoc_revision_id = generate_truncated_uuid();
+                    let created_at_ts = naive_datetime.timestamp();
                     let result_mobiledoc = conn.exec_drop(
-                        "INSERT INTO mobiledoc_revisions (post_id, mobiledoc, created_at) VALUES (?, ?, ?)",
-                        (&post_id, &mobiledoc_json, &post.created_at),
+                        "INSERT INTO mobiledoc_revisions (id, post_id, mobiledoc, created_at, created_at_ts) VALUES (?, ?, ?, ?, ?)",
+                        (&mobiledoc_revision_id, &post_id, &mobiledoc_json, &post.created_at, &created_at_ts),
                     );
 
                     match result_mobiledoc {
@@ -131,13 +169,26 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
                         Err(e) => tracing::error!("failed to insert mobiledoc revision: {:?}", &e),
                     }
 
-                    // Inserção em post_revisions
-                    let result_post_revision = conn.exec_drop(
-                        "INSERT INTO post_revisions (post_id, title, html, created_at) VALUES (?, ?, ?, ?)",
-                        (&post_id, &post.title, &post.html, &post.created_at),
+                    let revision_id = generate_truncated_uuid();
+
+                    let post_result_revision = conn.exec_drop(
+                        "INSERT INTO post_revisions
+                        (id, post_id, created_at_ts, created_at, lexical, title, post_status, author_id, reason) VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            revision_id,
+                            post_id.clone(),
+                            created_at_ts,
+                            &post.created_at,
+                            mobiledoc_json,
+                            &post.title.clone(),
+                            "published",
+                            author_id.clone(),
+                            "published",
+                        ),
                     );
 
-                    match result_post_revision {
+                    match post_result_revision {
                         Ok(_) => tracing::info!("inserted post revision"),
                         Err(e) => tracing::error!("failed to insert post revision: {:?}", &e),
                     }

@@ -17,6 +17,7 @@ mod health;
 mod image;
 mod posts;
 mod tags;
+mod database;
 use authors::add_author;
 use health::health_check_handler;
 use image::add_image;
@@ -47,10 +48,11 @@ async fn main() {
         .route("/api/tags", post(add_tag))
         .route("/api/posts", post(add_post))
         .route("/api/image", post(add_image))
-        .layer(middleware::from_fn(validation_fingerprint));
+        .layer(middleware::from_fn(validation_fingerprint))
+        .layer(middleware::from_fn(error_logging_middleware));
 
     println!("🚀 Server started");
-    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:8888").await.unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service())
         .await
@@ -78,3 +80,24 @@ async fn validation_fingerprint(req: Request<Body>, next: Next) -> Result<Respon
 
     Ok(next.run(req).await)
 }
+
+async fn error_logging_middleware(req: Request<Body>, next: Next) -> Response {
+    let result = next.run(req).await;
+
+    if result.status().is_server_error() {
+        tracing::error!(
+            "Server error in endpoint: {} - {}",
+            result.status(),
+            result.status().canonical_reason().unwrap_or("Unknown error")
+        );
+    } else if result.status() == StatusCode::METHOD_NOT_ALLOWED {
+        tracing::error!(
+            "Method Not Allowed (405) in endpoint: {} - {}",
+            result.status(),
+            result.status().canonical_reason().unwrap_or("Unknown error")
+        );
+    }
+
+    result
+}
+
