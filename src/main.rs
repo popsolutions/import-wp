@@ -20,7 +20,7 @@ mod tags;
 mod database;
 use authors::add_author;
 use health::health_check_handler;
-use image::add_image;
+use image::{save_image_post, save_image_author};
 use posts::add_post;
 use tags::add_tag;
 
@@ -47,7 +47,8 @@ async fn main() {
         .route("/api/authors", post(add_author))
         .route("/api/tags", post(add_tag))
         .route("/api/posts", post(add_post))
-        .route("/api/image", post(add_image))
+        .route("/api/posts/image", post(save_image_post))
+        .route("/api/authors/image", post(save_image_author))
         .layer(middleware::from_fn(validation_fingerprint))
         .layer(middleware::from_fn(error_logging_middleware));
 
