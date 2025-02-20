@@ -163,6 +163,33 @@ pub async fn save_image_author(Json(image_author): Json<ImageAuthor>) -> Respons
         }
     }
 }
+
+pub async fn save_image_raw(Json(image_request): Json<ImageRequest>) -> Response {
+    match save_image(image_request).await {
+        Ok(image_reply) => {
+            let image_path_reply = image_reply.image;
+            (
+                StatusCode::CREATED,
+                Json(json!({
+                    "image": image_path_reply,
+                })),
+            )
+            .into_response()
+        }
+        Err(message) => {
+            tracing::info!("error: {}", message);
+            return (
+                Json(json!({
+                    "status": "fail",
+                    "message": message
+                })),
+            )
+            .into_response();
+       
+        }
+    }
+}
+
 pub async fn save_image_post(Json(image_post): Json<ImagePost>) -> Response {
     let mut conn = match connect_to_database() {
         Ok(conn) => conn,
