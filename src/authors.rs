@@ -11,6 +11,7 @@ pub struct User {
     email: String,
     login: String,
     password: String,
+    image_url: Option<String>,
     created_at: String,
 }
 
@@ -27,11 +28,16 @@ pub async fn add_author(Json(user): Json<User>) -> impl IntoResponse {
     let pool = Pool::new(connection_opts).unwrap();
     let mut conn = pool.get_conn().unwrap();
     let user_id = generate_truncated_uuid();
+    let image_url = if let Some(image) = user.image_url {
+        format!("__GHOST_URL__{}", image)
+    } else {
+        format!("")
+    };
     let result = conn.exec_drop(
         "INSERT INTO users
-            (id, name, email, slug, password, created_at, updated_at, created_by)
+            (id, name, email, slug, password, created_at, updated_at, profile_image, created_by)
         VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?)",
+            (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             &user_id,
             &user.name,
@@ -40,6 +46,7 @@ pub async fn add_author(Json(user): Json<User>) -> impl IntoResponse {
             &user.password,
             &user.created_at,
             &user.created_at,
+            &image_url,
             1,
         ),
     );
