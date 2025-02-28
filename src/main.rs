@@ -11,6 +11,8 @@ use dotenv::dotenv;
 use std::env;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use axum::Json;
+use serde_json::json;
 
 mod authors;
 mod health;
@@ -42,6 +44,7 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
     let app = Router::new()
         .route("/api/healthcheck", get(health_check_handler))
         .route("/api/authors", post(add_author))
@@ -52,7 +55,23 @@ async fn main() {
         .route("/api/authors/image", post(save_image_author))
         .layer(middleware::from_fn(validation_fingerprint))
         .layer(middleware::from_fn(error_logging_middleware));
+    
+    let _db_url = match env::var("DB_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            tracing::info!("error url");
+            panic!("Erro crítico: DB_URL não está configurada");
+           
+        }
+    };
 
+    let _api_token = match env::var("API_TOKEN") {
+        Ok(url) => url,
+        Err(_) => {
+            tracing::info!("error url");
+            panic!("Erro crítico: API_TOKEN não está configurada");
+        }
+    };
     println!("🚀 Server started");
     let listener = TcpListener::bind("0.0.0.0:8888").await.unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
