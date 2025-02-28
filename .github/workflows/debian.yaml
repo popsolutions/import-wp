@@ -1,4 +1,4 @@
-name: Build for Debian 11 (musl)
+name: Build for Debian 11
 
 on:
   push:
@@ -8,24 +8,24 @@ on:
 
 jobs:
   build:
-    runs-on: debian-11  
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Instalar toolchain musl
-        run: rustup target add x86_64-unknown-linux-musl
-
       - name: Instalar dependências
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools pkg-config libssl-dev
 
-      - name: Compilar binário estático
-        run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compilar para Debian 11
+        run: cargo build --release
 
       - name: Fazer upload do binário
         uses: actions/upload-artifact@v4
         with:
-          name: import_wp-debian11-musl
-          path: target/x86_64-unknown-linux-musl/release/import_wp
+          name: import_wp-debian11
+          path: target/release/import_wp
 
