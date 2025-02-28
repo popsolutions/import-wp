@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mysql = "23.0.1"
+mysql = { version = "23.0.1", default-features = false, features = ["rustls-tls"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 dotenv = "0.15.0"
 serde = { version = "1.0.209", features = ["derive"] }
@@ -19,3 +19,5 @@ image = "0.25.5"
 webp = "0.3.0"
 axum = { version = "0.7.9", features = ["multipart"] }
 base64 = "0.22.1"
+rustls = "0.21"
+

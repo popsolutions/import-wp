@@ -1,0 +1,31 @@
+name: Build for Debian 11
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependências
+        run: sudo apt-get update && sudo apt-get install -y musl-tools pkg-config libssl-dev
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compilar para Debian 11
+        run: cargo build --release
+
+      - name: Fazer upload do binário
+        uses: actions/upload-artifact@v4
+        with:
+          name: import_wp-debian11
+          path: target/release/import_wp
+
