@@ -2,6 +2,8 @@ DELETE FROM posts_tags;
 
 DELETE FROM posts_authors;
 
+DELETE FROM posts_meta;
+
 DELETE FROM posts;
 
 DELETE FROM tags;
