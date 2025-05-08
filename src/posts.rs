@@ -20,6 +20,7 @@ pub struct Post {
     updated_at: String,
     author_id: String,
     image_url: Option<String>,
+    meta_title: Option<String>,
     tags: String,
 }
 
@@ -31,6 +32,19 @@ pub struct PostReply {
     created_at: String,
     updated_at: String,
     author_id: String,
+}
+
+fn get_meta_title(post: &Post) -> String {
+    let meta_title = if let Some(meta_title_string) = &post.meta_title {
+        return meta_title_string.to_string();
+    } else {
+        "".to_string()
+    };
+    if post.title.len() > 30 {
+        meta_title
+    } else {
+        post.title.to_string()
+    }
 }
 
 fn insert_post(mut conn: mysql::PooledConn, author_id: String, post: Post) -> impl IntoResponse {
@@ -188,6 +202,24 @@ fn insert_post(mut conn: mysql::PooledConn, author_id: String, post: Post) -> im
                 Err(e) => tracing::error!("failed to insert post revision: {:?}", &e),
             }
 
+             let post_meta_id = generate_truncated_uuid();
+             let meta_title = get_meta_title(&post);
+             let result_meta = conn.exec_drop(
+             "INSERT INTO posts_meta (id, post_id, meta_title, meta_description) VALUES (?, ?, ?, ?)",
+             (
+                 &post_meta_id,
+                 &post_id,
+                 &meta_title.clone(),
+                 &post.excerpt.clone(),
+            ));
+            match result_meta {
+                Ok(_) => {
+                    tracing::info!("inserted post meta");
+                }
+                Err(err_resuolt_meta) => {
+                    tracing::error!("meta failed to insert new author: {:?}", &err_resuolt_meta);
+                }
+            }
             let response = PostReply {
                 id: post_id,
                 title: post.title,
@@ -198,7 +230,8 @@ fn insert_post(mut conn: mysql::PooledConn, author_id: String, post: Post) -> im
             };
             (StatusCode::CREATED, Json(response)).into_response()
         }
-        Err(_) => {
+        Err(error) => {
+            tracing::error!("Error post inset, {:?}", error);
             tracing::error!("add_post failed to insert new post");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -227,12 +260,17 @@ pub async fn add_post(Json(post): Json<Post>) -> impl IntoResponse {
     };
 
     let query = "SELECT user_id FROM users_migration WHERE external_id = :external_id";
+    tracing::info!("search author_id: {:?}", post.author_id);
+
     let res_author: Option<String> = conn
         .exec_first(query, params! { "external_id" => post.author_id.clone() })
         .unwrap_or(None);
 
+    tracing::info!("search author: {:?}", res_author);
+
     match res_author {
         Some(author_id) => {
+            tracing::info!("author id found: {}", author_id);
             tracing::info!("author id found: {}", author_id);
             insert_post(conn, author_id, post).into_response()
         }
