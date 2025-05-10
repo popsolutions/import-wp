@@ -3,8 +3,13 @@ use axum::{
 };
 use mysql::{Opts, Pool};
 use std::env;
+use std::sync::OnceLock;
 
-pub fn connect_to_database() -> Result<mysql::PooledConn, (StatusCode, String)> {
+// Pool global usando OnceLock para inicialização única
+static DB_POOL: OnceLock<Pool> = OnceLock::new();
+
+
+pub fn init_db_pool() -> Result<(), (StatusCode, String)> {
     let db_url = env::var("DB_URL").map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -26,14 +31,28 @@ pub fn connect_to_database() -> Result<mysql::PooledConn, (StatusCode, String)> 
         )
     })?;
 
-    let conn = pool.get_conn().map_err(|_| {
+    DB_POOL.set(pool).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Falha ao configurar o pool global".to_string(),
+        )
+    })
+}
+
+
+
+pub fn connect_to_database() -> Result<mysql::PooledConn, (StatusCode, String)> {
+    let pool = DB_POOL.get().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Pool de conexões não inicializado".to_string(),
+    ))?;
+
+    pool.get_conn().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Falha ao obter conexão do pool".to_string(),
         )
-    })?;
-
-    Ok(conn)
+    })
 }
 
 

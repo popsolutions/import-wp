@@ -45,6 +45,20 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let _db_url = match env::var("DB_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            tracing::info!("error url");
+            panic!("Erro crítico: DB_URL não está configurada");
+           
+        }
+    };
+    // Inicializa o pool de conexões do banco de dados
+    if let Err((status, message)) = database::init_db_pool() {
+        tracing::error!("Falha ao inicializar o pool de banco de dados: {}", message);
+        panic!("Erro crítico: Falha ao inicializar o pool de banco de dados");
+    }
+
     let app = Router::new()
         .route("/api/healthcheck", get(health_check_handler))
         .route("/api/authors", post(add_author))
@@ -56,15 +70,6 @@ async fn main() {
         .layer(middleware::from_fn(validation_fingerprint))
         .layer(middleware::from_fn(error_logging_middleware));
     
-    let _db_url = match env::var("DB_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            tracing::info!("error url");
-            panic!("Erro crítico: DB_URL não está configurada");
-           
-        }
-    };
-
     let _api_token = match env::var("API_TOKEN") {
         Ok(url) => url,
         Err(_) => {
